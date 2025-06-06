@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VAST version="3.0">
+  <Ad id="wrapper-1">
+    <Wrapper>
+      <AdSystem>Wrapper Ad System 1</AdSystem>
+      <VASTAdTagURI><![CDATA[file://sample_wrapper_nested.xml]]></VASTAdTagURI>
+      <Impression id="wrapper1-imp1"><![CDATA[https://example.com/wrapper1/impression1]]></Impression>
+      <Impression id="wrapper1-imp2"><![CDATA[https://example.com/wrapper1/impression2]]></Impression>
+      <Error><![CDATA[https://example.com/wrapper1/error]]></Error>
+      <Creatives>
+        <Creative>
+          <Linear>
+            <TrackingEvents>
+              <Tracking event="start"><![CDATA[https://example.com/wrapper1/tracking/start]]></Tracking>
+              <Tracking event="firstQuartile"><![CDATA[https://example.com/wrapper1/tracking/firstQuartile]]></Tracking>
+              <Tracking event="midpoint"><![CDATA[https://example.com/wrapper1/tracking/midpoint]]></Tracking>
+              <Tracking event="thirdQuartile"><![CDATA[https://example.com/wrapper1/tracking/thirdQuartile]]></Tracking>
+              <Tracking event="complete"><![CDATA[https://example.com/wrapper1/tracking/complete]]></Tracking>
+            </TrackingEvents>
+            <VideoClicks>
+              <ClickTracking><![CDATA[https://example.com/wrapper1/click/tracking1]]></ClickTracking>
+              <ClickTracking><![CDATA[https://example.com/wrapper1/click/tracking2]]></ClickTracking>
+              <CustomClick><![CDATA[https://example.com/wrapper1/click/custom]]></CustomClick>
+            </VideoClicks>
+          </Linear>
+        </Creative>
+      </Creatives>
+    </Wrapper>
+  </Ad>
+</VAST> 

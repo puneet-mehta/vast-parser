@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VAST version="3.0">
+  <Ad id="nested-wrapper-123">
+    <Wrapper>
+      <AdSystem>VAST Parser Test</AdSystem>
+      <VASTAdTagURI><![CDATA[file://sample_wrapper.xml]]></VASTAdTagURI>
+      <Impression><![CDATA[https://example.com/nested-wrapper/impression]]></Impression>
+      <Creatives>
+        <Creative>
+          <Linear>
+            <TrackingEvents>
+              <Tracking event="start"><![CDATA[https://example.com/nested-wrapper/track/start]]></Tracking>
+              <Tracking event="complete"><![CDATA[https://example.com/nested-wrapper/track/complete]]></Tracking>
+            </TrackingEvents>
+          </Linear>
+        </Creative>
+      </Creatives>
+    </Wrapper>
+  </Ad>
+</VAST> 
