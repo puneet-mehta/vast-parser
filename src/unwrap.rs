@@ -4,6 +4,8 @@ use crate::parser;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 
 /// Maximum depth of VAST wrapper chain to follow
 const MAX_WRAPPER_DEPTH: usize = 10;
@@ -141,21 +143,43 @@ pub fn fetch_vast_content(url_or_path: &str) -> Result<String> {
             .map_err(|e| VastError::IoError(e));
     }
     
-    // Assume it's a web URL
-    fetch_vast_from_url(url_or_path)
+    // Assume it's a web URL - use a runtime to run the async function
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| VastError::Other(format!("Failed to create Tokio runtime: {}", e)))?;
+    
+    rt.block_on(fetch_vast_from_url(url_or_path))
 }
 
 /// Fetch VAST XML from a URL
-fn fetch_vast_from_url(url: &str) -> Result<String> {
+async fn fetch_vast_from_url(url: &str) -> Result<String> {
+    // Generate a random request ID for tracking in logs
+    let req_id: String = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(6)
+        .map(char::from)
+        .collect();
+    
     // Validate URL
     let url = url::Url::parse(url).map_err(|e| VastError::UrlError(e))?;
     
-    println!("Fetching from URL: {}", url);
+    println!("[{}] Fetching from URL: {}", req_id, url);
     
-    // Fetch content from URL
-    let response = reqwest::blocking::get(url).map_err(|e| {
+    // Start timing
+    let start_time = std::time::Instant::now();
+    
+    // Create a client with timeout
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| VastError::Other(format!("Failed to build HTTP client: {}", e)))?;
+    
+    // Fetch content from URL with timeout
+    let response = client.get(url).send().await.map_err(|e| {
+        println!("[{}] Request failed after {:?}", req_id, start_time.elapsed());
         VastError::Other(format!("Failed to fetch URL: {}", e))
     })?;
+    
+    println!("[{}] Received response in {:?}", req_id, start_time.elapsed());
     
     if !response.status().is_success() {
         return Err(VastError::Other(
@@ -164,9 +188,11 @@ fn fetch_vast_from_url(url: &str) -> Result<String> {
     }
     
     // Get the response body as text
-    let xml_content = response.text().map_err(|e| {
+    let xml_content = response.text().await.map_err(|e| {
         VastError::Other(format!("Failed to read response body: {}", e))
     })?;
+    
+    println!("[{}] Total request completed in {:?}", req_id, start_time.elapsed());
     
     Ok(xml_content)
 } 
