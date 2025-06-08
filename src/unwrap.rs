@@ -18,7 +18,7 @@ const MAX_WRAPPER_DEPTH: usize = 10;
 /// 3. If there's a Wrapper ad, fetch the VASTAdTagURI and repeat the process
 /// 4. Continue until an InLine ad is found or MAX_WRAPPER_DEPTH is reached
 /// 
-/// If no InLine ad is found, or if any request fails, returns an empty VAST document
+/// If no InLine ad is found, returns the last valid VAST in the chain
 pub fn unwrap_vast(xml_content: &str) -> Result<Vast> {
     unwrap_vast_with_depth(xml_content, 0, &mut HashSet::new())
 }
@@ -31,11 +31,12 @@ pub fn unwrap_vast(xml_content: &str) -> Result<Vast> {
 /// 3. If there's a Wrapper ad, fetch the VASTAdTagURI and repeat the process
 /// 4. Continue until an InLine ad is found or MAX_WRAPPER_DEPTH is reached
 /// 
-/// If no InLine ad is found, or if any request fails, returns an empty VAST document
+/// If no InLine ad is found, returns the last valid VAST in the chain
 pub async fn unwrap_vast_async(xml_content: &str) -> Result<Vast> {
     // Use an iterative approach instead of recursion to avoid issues with async recursion
     let mut result_ads = Vec::new();
     let mut visited_urls = HashSet::new();
+    let mut last_valid_vast = None;
     
     // Queue of (XML content, depth) pairs for breadth-first traversal
     let mut queue = VecDeque::new();
@@ -56,6 +57,9 @@ pub async fn unwrap_vast_async(xml_content: &str) -> Result<Vast> {
                 continue;
             }
         };
+        
+        // Store this as the last valid VAST we've seen
+        last_valid_vast = Some(vast.clone());
         
         // Process each ad in the VAST document
         for ad in vast.ads {
@@ -94,22 +98,32 @@ pub async fn unwrap_vast_async(xml_content: &str) -> Result<Vast> {
         }
     }
     
-    // Get the version from the initial VAST or default to 4.0
-    let version = match parser::parse_vast(xml_content) {
-        Ok(vast) => vast.version,
-        Err(_) => "4.0".to_string(), // Default to latest version
-    };
+    // If we found InLine ads, use them
+    if !result_ads.is_empty() {
+        // Get the version from the initial VAST or default to 4.0
+        let version = match parser::parse_vast(xml_content) {
+            Ok(vast) => vast.version,
+            Err(_) => "4.0".to_string(), // Default to latest version
+        };
+        
+        return Ok(Vast {
+            version,
+            ads: result_ads,
+            error: None,
+        });
+    }
     
-    // Return a new VAST document with the collected ads
-    let empty = result_ads.is_empty();
+    // If no InLine ads were found but we have at least one valid VAST, return the last one
+    if let Some(last_vast) = last_valid_vast {
+        println!("No InLine ads found, returning the last valid VAST response");
+        return Ok(last_vast);
+    }
+    
+    // If we got here, we didn't find any valid VAST at all
     Ok(Vast {
-        version,
-        ads: result_ads,
-        error: if empty {
-            Some("No InLine ads found in the VAST chain".to_string())
-        } else {
-            None
-        },
+        version: "4.0".to_string(), // Default to latest version
+        ads: Vec::new(),
+        error: Some("No valid VAST documents found in the chain".to_string()),
     })
 }
 
@@ -141,11 +155,13 @@ fn unwrap_vast_with_depth(xml_content: &str, depth: usize, visited_urls: &mut Ha
 
     // Process each ad in the VAST document
     let mut result_ads = Vec::new();
+    let mut found_inline = false;
     
-    for ad in vast.ads {
+    for ad in vast.ads.clone() {
         // If the ad has an InLine element, include it in the result
         if ad.inline.is_some() {
             result_ads.push(ad);
+            found_inline = true;
         }
         // If the ad has a Wrapper element, follow the VASTAdTagURI
         else if let Some(wrapper) = &ad.wrapper {
@@ -168,9 +184,12 @@ fn unwrap_vast_with_depth(xml_content: &str, depth: usize, visited_urls: &mut Ha
                     // Recursively unwrap the next VAST document
                     match unwrap_vast_with_depth(&next_xml, depth + 1, visited_urls) {
                         Ok(next_vast) => {
-                            // Add any ads from the next level to our result
-                            for next_ad in next_vast.ads {
-                                result_ads.push(next_ad);
+                            // If the next level has InLine ads, add them to our result
+                            if !next_vast.ads.is_empty() {
+                                for next_ad in next_vast.ads {
+                                    result_ads.push(next_ad);
+                                    found_inline = true;
+                                }
                             }
                         }
                         Err(e) => {
@@ -189,12 +208,18 @@ fn unwrap_vast_with_depth(xml_content: &str, depth: usize, visited_urls: &mut Ha
         }
     }
     
-    // Return a new VAST document with the collected ads
-    Ok(Vast {
-        version: vast.version,
-        ads: result_ads,
-        error: vast.error,
-    })
+    // If we found InLine ads, return them
+    if found_inline {
+        return Ok(Vast {
+            version: vast.version,
+            ads: result_ads,
+            error: vast.error,
+        });
+    }
+    
+    // If no InLine ads were found, return the current VAST document
+    println!("No InLine ads found, returning the last valid VAST response");
+    Ok(vast)
 }
 
 /// Fetch VAST content from a URL or file path
