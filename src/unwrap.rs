@@ -115,7 +115,6 @@ pub async fn unwrap_vast_async(xml_content: &str) -> Result<Vast> {
     
     // If no InLine ads were found but we have at least one valid VAST, return the last one
     if let Some(last_vast) = last_valid_vast {
-        println!("No InLine ads found, returning the last valid VAST response");
         return Ok(last_vast);
     }
     
@@ -218,7 +217,6 @@ fn unwrap_vast_with_depth(xml_content: &str, depth: usize, visited_urls: &mut Ha
     }
     
     // If no InLine ads were found, return the current VAST document
-    println!("No InLine ads found, returning the last valid VAST response");
     Ok(vast)
 }
 
