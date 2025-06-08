@@ -2,7 +2,8 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 // Import the library
-use vast_parser::{parser, stitcher, unwrap};
+use vast_parser::{parser, unwrap};
+use vast_parser::async_api;
 
 /// VAST parser and unwrapper
 #[derive(Parser)]
@@ -48,13 +49,14 @@ enum Commands {
     },
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
         Commands::Parse { input, pretty } => {
-            // Fetch the VAST content
-            let content = unwrap::fetch_vast_content(input)?;
+            // Fetch the VAST content asynchronously
+            let content = unwrap::fetch_vast_content_async(input).await?;
             
             // Parse the VAST XML
             let vast = parser::parse_vast(&content)?;
@@ -67,11 +69,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         Commands::Unwrap { input, pretty } => {
-            // Fetch the VAST content
-            let content = unwrap::fetch_vast_content(input)?;
+            // Fetch the VAST content asynchronously
+            let content = unwrap::fetch_vast_content_async(input).await?;
             
-            // Unwrap the VAST
-            let vast = unwrap::unwrap_vast(&content)?;
+            // Unwrap the VAST asynchronously
+            let vast = async_api::unwrap_vast(&content).await?;
             
             // Print the unwrapped VAST
             if *pretty {
@@ -81,15 +83,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         Commands::Stitch { input, output } => {
-            // Fetch the VAST content
-            let content = unwrap::fetch_vast_content(input)?;
+            // Fetch the VAST content asynchronously
+            let content = unwrap::fetch_vast_content_async(input).await?;
             
-            // Stitch the VAST
-            let stitched_xml = stitcher::stitch_vast(&content)?;
+            // Stitch the VAST asynchronously
+            let stitched_xml = async_api::stitch_vast(&content).await?;
             
             // Output the stitched VAST
             if let Some(output_path) = output {
-                std::fs::write(output_path, &stitched_xml)?;
+                tokio::fs::write(output_path, &stitched_xml).await?;
                 println!("Stitched VAST written to {}", output_path.display());
             } else {
                 println!("{}", stitched_xml);

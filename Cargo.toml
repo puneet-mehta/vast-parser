@@ -12,5 +12,5 @@ url = "2.4"  # URL parsing and validation
 log = "0.4"  # Logging
 clap = { version = "4.4", features = ["derive"] }  # Command line argument parsing
 reqwest = { version = "0.11", features = ["blocking", "json"] }  # HTTP client
-tokio = { version = "1.28", features = ["rt", "rt-multi-thread"] }  # Async runtime
+tokio = { version = "1.28", features = ["rt", "rt-multi-thread", "fs", "macros"] }  # Async runtime
 rand = "0.8"  # Random number generation

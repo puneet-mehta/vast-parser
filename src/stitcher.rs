@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::models::*;
 use crate::unwrap;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 /// Stitch together a new VAST XML that combines the InLine ad with all the wrapper chain elements
 pub fn stitch_vast(xml_content: &str) -> Result<String> {
@@ -10,6 +10,21 @@ pub fn stitch_vast(xml_content: &str) -> Result<String> {
     
     // Then, unwrap the VAST to find the InLine ad
     let unwrapped_vast = unwrap::unwrap_vast(xml_content)?;
+    
+    // Now stitch together the final VAST
+    let stitched_vast = stitch_vast_from_unwrapped(unwrapped_vast, wrapper_tracking)?;
+    
+    // Convert to XML
+    vast_to_xml(&stitched_vast)
+}
+
+/// Async version of stitch_vast that combines the InLine ad with all the wrapper chain elements
+pub async fn stitch_vast_async(xml_content: &str) -> Result<String> {
+    // First, collect all wrapper tracking elements asynchronously
+    let wrapper_tracking = collect_wrapper_tracking_async(xml_content).await?;
+    
+    // Then, unwrap the VAST to find the InLine ad asynchronously
+    let unwrapped_vast = unwrap::unwrap_vast_async(xml_content).await?;
     
     // Now stitch together the final VAST
     let stitched_vast = stitch_vast_from_unwrapped(unwrapped_vast, wrapper_tracking)?;
@@ -32,6 +47,52 @@ struct WrapperTracking {
 fn collect_wrapper_tracking(xml_content: &str) -> Result<WrapperTracking> {
     let mut result = WrapperTracking::default();
     collect_wrapper_tracking_recursive(xml_content, &mut result, &mut Vec::new())?;
+    Ok(result)
+}
+
+/// Async version to collect tracking information from all wrappers in the chain
+/// Uses an iterative approach instead of recursion to avoid issues with async recursion
+async fn collect_wrapper_tracking_async(xml_content: &str) -> Result<WrapperTracking> {
+    let mut result = WrapperTracking::default();
+    let mut visited_urls = Vec::new();
+    
+    // Use a queue for breadth-first traversal instead of recursion
+    let mut queue = VecDeque::new();
+    queue.push_back(xml_content.to_string());
+    
+    while let Some(current_xml) = queue.pop_front() {
+        // Parse the VAST XML
+        let vast = crate::parser::parse_vast(&current_xml)?;
+        
+        // Process each ad
+        for ad in vast.ads {
+            if let Some(wrapper) = ad.wrapper {
+                // Extract tracking information from this wrapper
+                extract_wrapper_tracking(&wrapper, &mut result);
+                
+                // Check if we've seen this URL before to avoid cycles
+                if visited_urls.contains(&wrapper.vast_ad_tag_uri) {
+                    continue;
+                }
+                
+                // Add this URL to the visited list
+                visited_urls.push(wrapper.vast_ad_tag_uri.clone());
+                
+                // Fetch the next VAST XML asynchronously
+                match unwrap::fetch_vast_content_async(&wrapper.vast_ad_tag_uri).await {
+                    Ok(next_xml) => {
+                        // Add to the queue for processing
+                        queue.push_back(next_xml);
+                    }
+                    Err(_) => {
+                        // If we can't fetch the next XML, just continue
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+    
     Ok(result)
 }
 
@@ -590,8 +651,7 @@ fn non_linear_ads_to_xml(non_linear_ads: &NonLinearAds) -> String {
     xml
 }
 
-/// Helper function to fetch VAST content from a URL or file path
+/// Helper function that calls unwrap module's fetch_vast_content
 fn fetch_vast_content(url_or_path: &str) -> Result<String> {
-    // Just reuse the implementation from unwrap module
-    crate::unwrap::fetch_vast_content(url_or_path)
+    unwrap::fetch_vast_content(url_or_path)
 } 
